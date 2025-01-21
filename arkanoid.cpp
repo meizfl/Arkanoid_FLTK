@@ -2,6 +2,8 @@
 #include <FL/Fl_Double_Window.H>
 #include <FL/Fl_Box.H>
 #include <FL/fl_draw.H>
+#include <FL/Fl_Choice.H>
+#include <FL/Fl_Button.H>
 #include <vector>
 #include <cstdlib>
 #include <ctime>
@@ -10,7 +12,7 @@
 class Ball {
 public:
     int x, y;
-    int dx, dy;
+    float dx, dy;
     static const int SIZE = 10;
 
     Ball(int startX, int startY) : x(startX), y(startY) {
@@ -52,25 +54,48 @@ class ArkanoidGame : public Fl_Double_Window {
     Ball ball;
     std::vector<Brick> bricks;
     int paddleX;
+    float paddleSpeed;
     static const int PADDLE_WIDTH = 80;
     static const int PADDLE_HEIGHT = 10;
     static const int PADDLE_Y = 550;
-    static const int SCORE_AREA_HEIGHT = 40;  // Высота области для счета
+    static const int SCORE_AREA_HEIGHT = 40;
     bool gameOver;
     int score;
     static const int BRICK_ROWS = 5;
     static const int BRICK_COLS = 10;
+    bool paused;
+    std::string pauseStatus;
 
 public:
-    ArkanoidGame() :
+    ArkanoidGame(int difficulty) :
     Fl_Double_Window(800, 600, "Arkanoid"),
     ball(400, 500),
     paddleX(360),
     gameOver(false),
-    score(0) {
+    score(0),
+    paused(false) {
 
+        setDifficulty(difficulty);
         initializeBricks();
-        Fl::add_timeout(1.0/60.0, Timer_CB, this);
+        Fl::add_timeout(1.0 / 60.0, Timer_CB, this);
+        pauseStatus = "Active";
+    }
+
+    void setDifficulty(int difficulty) {
+        switch (difficulty) {
+            case 0:
+                ball.dx = ball.dy = 2;
+                paddleSpeed = 15;
+                break;
+            case 1:
+                ball.dx = ball.dy = 3;
+                paddleSpeed = 20;
+                break;
+            case 2:
+                ball.dx = ball.dy = 5;
+                paddleSpeed = 25;
+                break;
+        }
     }
 
     void initializeBricks() {
@@ -82,19 +107,18 @@ public:
             for (int i = 0; i < BRICK_COLS; i++) {
                 int actualWidth = (i == BRICK_COLS - 1) ?
                 windowWidth - (brickWidth * (BRICK_COLS - 1)) : brickWidth;
-                // Начинаем кирпичи после области счета
                 bricks.emplace_back(i * brickWidth, j * (Brick::HEIGHT + 5) + SCORE_AREA_HEIGHT, actualWidth);
             }
         }
     }
 
-    static void Timer_CB(void* v) {
-        ((ArkanoidGame*)v)->onTimer();
-        Fl::repeat_timeout(1.0/60.0, Timer_CB, v);
+    static void Timer_CB(void *v) {
+        ((ArkanoidGame *) v)->onTimer();
+        Fl::repeat_timeout(1.0 / 60.0, Timer_CB, v);
     }
 
     void onTimer() {
-        if (gameOver) return;
+        if (gameOver || paused) return;
 
         ball.move();
 
@@ -106,7 +130,7 @@ public:
 
         // Отскок от верхней границы области счета
         if (ball.y <= SCORE_AREA_HEIGHT) {
-            ball.dy = abs(ball.dy);  // Всегда отскакиваем вниз
+            ball.dy = std::abs(ball.dy);
             ball.y = SCORE_AREA_HEIGHT;
         }
 
@@ -117,12 +141,12 @@ public:
         }
 
         if (ball.collidesWith(paddleX, PADDLE_Y, PADDLE_WIDTH, PADDLE_HEIGHT)) {
-            ball.dy = -abs(ball.dy);
-            float hitPos = (ball.x - paddleX) / (float)PADDLE_WIDTH;
+            ball.dy = -std::abs(ball.dy);
+            float hitPos = (ball.x - paddleX) / (float) PADDLE_WIDTH;
             ball.dx = (hitPos - 0.5f) * 8;
         }
 
-        for (auto& brick : bricks) {
+        for (auto &brick : bricks) {
             if (!brick.active) continue;
 
             if (ball.collidesWith(brick.x, brick.y, brick.WIDTH, Brick::HEIGHT)) {
@@ -146,15 +170,19 @@ public:
             case FL_KEYDOWN:
                 switch (Fl::event_key()) {
                     case FL_Left:
-                        if (paddleX > 0) paddleX -= 20;
+                        if (paddleX > 0) paddleX -= paddleSpeed;
                         break;
                     case FL_Right:
-                        if (paddleX < w() - PADDLE_WIDTH) paddleX += 20;
+                        if (paddleX < w() - PADDLE_WIDTH) paddleX += paddleSpeed;
                         break;
                     case FL_Enter:
                         if (gameOver) {
                             resetGame();
                         }
+                        break;
+                    case ' ':
+                        paused = !paused;
+                        pauseStatus = paused ? "Paused" : "Active";
                         break;
                 }
                 redraw();
@@ -169,6 +197,8 @@ public:
         gameOver = false;
         score = 0;
         initializeBricks();
+        paused = false;
+        pauseStatus = "Active";
     }
 
     void draw() {
@@ -186,6 +216,11 @@ public:
         std::string scoreText = "Score: " + std::to_string(score);
         fl_draw(scoreText.c_str(), 20, 30);
 
+        // Отрисовка статуса паузы
+        int pauseStatusWidth, pauseStatusHeight;
+        fl_measure(pauseStatus.c_str(), pauseStatusWidth, pauseStatusHeight);
+        fl_draw(pauseStatus.c_str(), w() - pauseStatusWidth - 20, 30);
+
         // Отрисовка мяча
         fl_color(FL_WHITE);
         fl_begin_polygon();
@@ -197,7 +232,7 @@ public:
         fl_rectf(paddleX, PADDLE_Y, PADDLE_WIDTH, PADDLE_HEIGHT);
 
         // Отрисовка кирпичей
-        for (const auto& brick : bricks) {
+        for (const auto &brick : bricks) {
             if (!brick.active) continue;
             fl_color(FL_RED);
             fl_rectf(brick.x, brick.y, brick.WIDTH, Brick::HEIGHT);
@@ -208,14 +243,42 @@ public:
         if (gameOver) {
             fl_color(FL_WHITE);
             fl_font(FL_HELVETICA, 30);
-            std::string gameOverText = "Game Over! Score: " + std::to_string(score) + " Press Enter to restart";
-            fl_draw(gameOverText.c_str(), 20, h() - 50);
+            std::string gameOverText = "Game Over! Score: " + std::to_string(score) +
+            " Press Enter to restart";
+        fl_draw(gameOverText.c_str(), 20, h() - 50);
         }
     }
 };
 
+class DifficultySelector : public Fl_Window {
+    Fl_Choice *difficultyChoice;
+    Fl_Button *startButton;
+    int selectedDifficulty;
+
+    static void Start_CB(Fl_Widget *w, void *data) {
+        DifficultySelector *selector = (DifficultySelector *) data;
+        selector->selectedDifficulty = selector->difficultyChoice->value();
+        selector->hide();
+        ArkanoidGame *game = new ArkanoidGame(selector->selectedDifficulty);
+        game->show();
+    }
+
+public:
+    DifficultySelector() : Fl_Window(200, 100, "Select Difficulty"), selectedDifficulty(1) {
+        difficultyChoice = new Fl_Choice(50, 15, 100, 30,"");
+        difficultyChoice->add("Easy");
+        difficultyChoice->add("Normal");
+        difficultyChoice->add("Hard");
+        difficultyChoice->value(1);
+
+        startButton = new Fl_Button(50, 50, 100, 30, "Start");
+        startButton->callback(Start_CB, this);
+        end();
+    }
+};
+
 int main(int argc, char *argv[]) {
-    ArkanoidGame *game = new ArkanoidGame();
-    game->show();
+    DifficultySelector selector;
+    selector.show();
     return Fl::run();
 }
