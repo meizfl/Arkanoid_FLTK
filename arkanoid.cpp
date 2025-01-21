@@ -170,10 +170,10 @@ public:
             case FL_KEYDOWN:
                 switch (Fl::event_key()) {
                     case FL_Left:
-                        if (paddleX > 0) paddleX -= paddleSpeed;
+                        if (!paused && paddleX > 0) paddleX -= paddleSpeed;
                         break;
                     case FL_Right:
-                        if (paddleX < w() - PADDLE_WIDTH) paddleX += paddleSpeed;
+                        if (!paused && paddleX < w() - PADDLE_WIDTH) paddleX += paddleSpeed;
                         break;
                     case FL_Enter:
                         if (gameOver) {
@@ -181,15 +181,17 @@ public:
                         }
                         break;
                     case ' ':
-                        paused = !paused;
-                        pauseStatus = paused ? "Paused" : "Active";
+                        paused = !paused;  // Переключаем состояние паузы
+                        pauseStatus = paused ? "Paused" : "Active";  // Обновляем статус
+                        redraw();  // Обновляем окно, чтобы отобразить новый статус
                         break;
                 }
-                redraw();
+                redraw();  // Обновляем окно после обработки клавиши
                 return 1;
         }
         return Fl_Double_Window::handle(event);
     }
+
 
     void resetGame() {
         ball = Ball(400, 500);
