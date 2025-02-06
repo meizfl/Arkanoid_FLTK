@@ -2,6 +2,7 @@
 
 You can compile it for any shoe, because the rendering is software.
 I am attaching four binaries: for Linux (the main development platform), Windows, Illumos and Haiku.
+
 **Написано мною по приколу за 3 часа.**
 
 Собрать можно под любой тапок, т.к. рендеринг софтверный.
